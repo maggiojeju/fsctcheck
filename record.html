@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>팩트체크 1일차 — 수업 기록</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body{background:#f3f5fb}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  h1{color:var(--navy);font-size:24px;margin:8px 0}
+  h2{color:var(--navy);font-size:19px;margin:24px 0 8px}
+  .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  .tools label{font-size:14px;color:var(--muted);display:flex;gap:4px;align-items:center}
+  table.part{width:100%;border-collapse:collapse;background:#fff;font-size:14px}
+  table.part th,table.part td{border:1px solid var(--line);padding:6px 8px;text-align:center}
+  table.part th{background:var(--soft);color:var(--navy)}
+  table.part td.nm{text-align:left;font-weight:700}
+  table.part td.tot{font-weight:900;color:var(--blue)}
+  .note{font-size:13px;color:var(--muted)}
+  .pc{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;margin:12px 0;break-inside:avoid;page-break-inside:avoid}
+  .pc h3{margin:0 0 4px;color:var(--navy);font-size:18px}
+  .pc .meta{font-size:13px;color:var(--muted);margin-bottom:6px}
+  .pc .aw{display:inline-block;background:#fff4d6;border-radius:8px;padding:2px 8px;font-size:13px;margin:2px 4px 2px 0;font-weight:700}
+  .pc img{max-width:60%;max-height:300px}
+  .cardv dt{margin-top:6px}
+  @media print{
+    .topbar,.tools,.noprint{display:none!important}
+    body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.wrap{max-width:none;padding:0}
+    .pc{border-color:#bbb}
+    .pagebreak{page-break-before:always}
+  }
+</style>
+<script>window.SAFE={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="topbar"><span>수업 기록 · 1일차</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
+<div class="wrap" id="gate"></div>
+<div class="wrap" id="app" style="display:none">
+  <h1>팩트체크 1일차 수업 기록 <small id="date" style="font-size:15px;color:var(--muted)"></small></h1>
+  <div class="tools"><button class="btn" id="print">인쇄 · PDF로 저장</button><button class="btn ghost" id="csv">참여 현황 엑셀(CSV) 받기</button>
+    <label><input type="checkbox" id="showHidden"> 숨긴 출품작도 포함</label></div>
+  <p class="note noprint">인쇄 창에서 대상(프린터)을 ‘PDF로 저장’으로 고르면 파일로 남길 수 있어요. 참여 현황은 첫 쪽, 출품 카드는 다음 쪽부터 나와요.</p>
+  <h2>참여 현황</h2>
+  <p class="note">웹앱 활동에 응답한 횟수예요(최대 23회). 말로 한 발표나 활동지 작성은 들어가지 않아요.</p>
+  <div id="part"></div>
+  <div class="pagebreak"></div>
+  <h2 id="enth">출품 카드</h2>
+  <div id="entries"></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const ROOM = params.get("room") || DEFAULT_ROOM;
+const $ = id => document.getElementById(id);
+const D = { state: {} };
+const esc = UI.esc;
+DB.onConnection(on => { $("conn").className = "dot" + (on ? " on" : ""); $("connt").textContent = DB.mode === "demo" ? "데모 모드" : (on ? "연결됨" : "연결 끊김"); });
+$("roomp").textContent = `방: ${ROOM}`;
+$("date").textContent = new Date().toLocaleDateString("ko-KR");
+
+function gate() {
+  if (SAFE.get("fcd1_teacher") === "ok" || params.has("hub")) return boot();
+  $("gate").innerHTML = UI.frame("수업 기록 (교사용)", `<div class="join"><label for="pin">교사 비밀번호</label><input id="pin" type="password" inputmode="numeric"><button class="btn" id="ok">열기</button></div>`);
+  const go = () => { if ($("pin").value === String(TEACHER_PIN)) { SAFE.set("fcd1_teacher", "ok"); boot(); } else $("pin").value = ""; };
+  $("ok").onclick = go; $("pin").onkeydown = e => { if (e.key === "Enter") go(); };
+}
+function boot() {
+  $("gate").style.display = "none"; $("app").style.display = "";
+  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
+  $("print").onclick = () => window.print();
+  $("csv").onclick = downloadCsv;
+  $("showHidden").onchange = render;
+}
+
+function rows() {
+  const S = D.students || {}, ids = new Set(Object.keys(S));
+  ["poll", "ai", "sort", "cards", "entries", "votes"].forEach(k => Object.keys(D[k] || {}).forEach(id => ids.add(id)));
+  Object.values(D.quiz || {}).forEach(q => Object.keys(q || {}).forEach(id => ids.add(id)));
+  const qs = UI.quizStats(D);
+  const partnerOf = name => Object.values(D.entries || {}).some(e => (e.partner || "").trim() && e.partner.trim() === (name || "").trim());
+  return [...ids].map(id => {
+    const name = (S[id] && S[id].name) || ((D.entries || {})[id] || {}).name || ((D.cards || {})[id] || {}).name || "(이름 없음)";
+    const quizN = QUIZ.filter((_, q) => ((D.quiz || {})[q] || {})[id]).length;
+    const poll = (D.poll || {})[id] != null ? 1 : 0;
+    const ai = (D.ai || {})[id] != null ? 1 : 0;
+    const sortN = Object.keys((D.sort || {})[id] || {}).length;
+    const card = (D.cards || {})[id] ? 1 : 0;
+    const entry = (D.entries || {})[id] ? 1 : (partnerOf(name) ? 1 : 0);
+    const voteN = Object.keys((D.votes || {})[id] || {}).length;
+    const total = poll + quizN + ai + sortN + card + entry + voteN;
+    return { name, poll, quizN, quizScore: qs.by[id] || 0, ai, sortN, card, cardScore: card ? UI.cardScore(D.cards[id].order) : null, entry, entryBy: (D.entries || {})[id] ? "직접" : (entry ? "짝" : ""), voteN, total };
+  }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ko", { numeric: true }));
+}
+
+function render() {
+  const R = rows();
+  $("part").innerHTML = R.length ? `<table class="part"><tr><th>순</th><th>이름</th><th>합계<br><small>/23</small></th><th>미니설문<br><small>/1</small></th><th>O/X 퀴즈<br><small>응답/10 (맞힘)</small></th><th>AI 얼굴<br><small>/1</small></th><th>문장 구분<br><small>/6</small></th><th>연대기<br><small>/1 (점수)</small></th><th>출품<br><small>/1</small></th><th>투표<br><small>/3</small></th></tr>
+    ${R.map((r, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(r.name)}</td><td class="tot">${r.total}</td><td>${r.poll ? "○" : "-"}</td><td>${r.quizN} (${r.quizScore})</td><td>${r.ai ? "○" : "-"}</td><td>${r.sortN}</td><td>${r.card ? `○ (${r.cardScore})` : "-"}</td><td>${r.entry ? `○${r.entryBy === "짝" ? " 짝" : ""}` : "-"}</td><td>${r.voteN}</td></tr>`).join("")}</table>` : `<p class="note">아직 기록이 없어요.</p>`;
+
+  const showHidden = $("showHidden").checked, ent = D.entries || {}, hid = D.hidden || {};
+  const got = {}; Object.values(D.votes || {}).forEach(v => AWARDS.forEach(([k]) => { if (v && v[k]) { got[v[k]] = got[v[k]] || {}; got[v[k]][k] = (got[v[k]][k] || 0) + 1; } }));
+  const list = Object.entries(ent).filter(([sid]) => showHidden || !hid[sid]).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+  $("enth").textContent = `출품 카드 (${list.length}개)`;
+  $("entries").innerHTML = list.map(([sid, e], i) => {
+    const aw = AWARDS.map(([k, name]) => (got[sid] || {})[k] ? `<span class="aw">${name} ${got[sid][k]}표</span>` : "").join("");
+    return `<div class="pc"><h3>${i + 1}. ${esc(e.title)}${hid[sid] ? " <small style='color:#d2423a'>(숨김)</small>" : ""}</h3>
+      <div class="meta">${esc(e.name)}${e.partner ? " · " + esc(e.partner) : ""} · ${e.at ? new Date(e.at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""}</div>
+      ${aw ? `<div>${aw}</div>` : ""}${UI.entryFull ? UI.entryFull(e) : ""}</div>`;
+  }).join("") || `<p class="note">출품작이 없어요.</p>`;
+}
+
+function downloadCsv() {
+  const R = rows(), head = ["순위", "이름", "합계(/23)", "미니설문", "OX응답(/10)", "OX맞힘", "AI얼굴", "문장구분(/6)", "연대기제출", "연대기점수", "출품", "투표(/3)"];
+  const q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const lines = [head.map(q).join(",")].concat(R.map((r, i) => [i + 1, r.name, r.total, r.poll, r.quizN, r.quizScore, r.ai, r.sortN, r.card, r.cardScore == null ? "" : r.cardScore, r.entry ? (r.entryBy || "직접") : "", r.voteN].map(q).join(",")));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `팩트체크_1일차_참여현황_${ROOM}.csv`; a.click();
+}
+gate();
+</script>
+</body>
+</html>
