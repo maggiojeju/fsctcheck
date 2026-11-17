@@ -1,7 +1,8 @@
 // 데이터 저장소: Firebase Realtime Database, 설정이 없으면 데모 모드(localStorage + 탭 간 동기화)
 (function () {
   const cfg = window.FIREBASE_CONFIG || {};
-  const useFirebase = !!(cfg.apiKey && cfg.databaseURL && window.firebase);
+  const hub = window.parent !== window && new URLSearchParams(location.search).has("hub");
+  const useFirebase = !hub && !!(cfg.apiKey && cfg.databaseURL && window.firebase);
   const ROOT = "factcheck_d1";
 
   function split(path) { return path.split("/").filter(Boolean); }
@@ -27,7 +28,7 @@
       },
       now: () => firebase.database.ServerValue.TIMESTAMP
     };
-  } else if (window.parent !== window && new URLSearchParams(location.search).has("hub")) {
+  } else if (hub) {
     // 미리보기: 바깥 화면(index.html)이 데이터를 갖고, 안쪽 화면들은 postMessage로 주고받기
     let tree = {}; const listeners = new Set();
     const get = (t, path) => split(path).reduce((o, k) => (o == null ? null : (o[k] === undefined ? null : o[k])), t);
