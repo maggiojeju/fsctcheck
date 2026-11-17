@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>속지 말고 잡아라! 팩트체크 — 교사 진행 화면 (1일차)</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .layout{display:grid;grid-template-columns:1fr 330px;gap:14px;padding:14px;align-items:start}
+  .stage{padding:0;max-width:none;margin:0;min-width:0}
+  .panel{background:#fff;border-radius:20px;padding:14px;position:sticky;top:56px;max-height:calc(100vh - 70px);overflow:auto}
+  .panel h4{margin:14px 0 6px;color:var(--navy);font-size:15px}
+  .nav{display:grid;grid-template-columns:1fr 1fr;gap:8px}.nav .btn{padding:14px 8px;font-size:19px}
+  .where{font-size:14px;color:var(--muted);margin:8px 0 0}
+  .steps{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+  .steps .sh{font-size:12px;font-weight:800;color:var(--blue);padding:6px 10px 2px;background:#f6f8fd;position:sticky;top:0}
+  .steps button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #eef1f6;background:#fff;padding:6px 10px;font-size:13.5px;cursor:pointer}
+  .steps button.act::before{content:"★ ";color:var(--blue)}
+  .steps button.cur{background:var(--navy);color:#fff}
+  .qr{text-align:center}.qr svg{width:170px;height:170px}
+  .url{font-size:12.5px;word-break:break-all;background:var(--soft);border-radius:10px;padding:8px}
+  .row{display:flex;gap:6px;flex-wrap:wrap}.row .btn{flex:1}
+  .big-qr{position:fixed;inset:0;background:rgba(20,25,70,.94);display:none;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:40;gap:14px;font-size:26px;font-weight:800}
+  .big-qr.on{display:flex}.big-qr .q{background:#fff;padding:18px;border-radius:20px}.big-qr .q svg{width:min(60vh,80vw);height:min(60vh,80vw)}
+  body.present .panel,body.present .topbar{display:none}body.present .layout{grid-template-columns:1fr}
+  @media (max-width:1000px){.layout{grid-template-columns:1fr}.panel{position:static;max-height:none}}
+</style>
+<script src="qrcode.js"></script>
+<script>window.SAFE={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};</script>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="topbar"><span>교사 진행 화면 · 1일차</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill" id="joined">참여 0명</span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
+<div id="gate" class="stage" style="padding:40px 16px;max-width:600px"></div>
+<div class="layout" id="app" style="display:none">
+  <main class="stage" id="stage"></main>
+  <aside class="panel">
+    <div class="nav"><button class="btn ghost" id="prev">◀ 이전</button><button class="btn" id="next">다음 ▶</button></div>
+    <p class="where" id="where"></p>
+    <div id="ctl"></div>
+    <h4>진행 순서 (누르면 이동, ★ 활동)</h4><div class="steps" id="steps"></div>
+    <h4>학생 접속</h4>
+    <div class="qr" id="qr"></div><div class="url" id="url"></div>
+    <div class="row" style="margin-top:8px"><button class="btn ghost" id="bigqr">QR 크게 (Q)</button><button class="btn ghost" id="copy">주소 복사</button></div>
+    <h4>응답 초기화</h4>
+    <div class="row"><button class="btn warn" data-rs="poll">미니 설문</button><button class="btn warn" data-rs="quiz">O/X 퀴즈</button><button class="btn warn" data-rs="ai">AI 얼굴</button></div>
+    <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="sort">문장 구분</button><button class="btn warn" data-rs="cards">연대기</button><button class="btn warn" data-rs="votes">투표</button></div>
+    <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="entries">출품작 전체</button><button class="btn warn" data-rs="students">참여 명단</button></div>
+    <p class="where">단축키: → / Space 다음 · ← 이전 · R 정답 공개 · Q QR · P 패널 숨기기(TV 화면용)</p>
+  </aside>
+</div>
+<div class="big-qr" id="bq"><div id="bqroom"></div><div class="q" id="bqimg"></div><div style="font-size:17px;font-weight:500" id="bqurl"></div><div style="font-size:15px;font-weight:500">아무 곳이나 누르면 닫혀요</div></div>
+<div id="modal"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const ROOM = params.get("room") || DEFAULT_ROOM;
+const $ = id => document.getElementById(id);
+const D = { state: { step: 0, reveal: false } };
+let openSid = null;
+const ctx = { role: "teacher" };
+const RS = { poll: "미니 설문", quiz: "O/X 퀴즈", ai: "AI 얼굴 점수", sort: "문장 구분", cards: "연대기 제출", votes: "투표", entries: "출품작 전체", students: "참여 명단" };
+
+DB.onConnection(on => { $("conn").className = "dot" + (on ? " on" : ""); $("connt").textContent = DB.mode === "demo" ? "데모 모드" : (on ? "연결됨" : "연결 끊김"); });
+$("roomp").textContent = `방: ${ROOM}`;
+
+function gate() {
+  if (SAFE.get("fcd1_teacher") === "ok" || params.has("hub")) return boot();
+  $("gate").innerHTML = UI.frame("교사 화면", `<div class="join"><div class="sub">방: <b>${UI.esc(ROOM)}</b> · 다른 반은 주소 끝에 ?room=3-1 처럼 붙이세요.</div>
+    <label for="pin">비밀번호</label><input id="pin" type="password" inputmode="numeric"><button class="btn" id="ok">시작하기</button></div>`);
+  const go = () => { if ($("pin").value === String(TEACHER_PIN)) { SAFE.set("fcd1_teacher", "ok"); boot(); } else $("pin").value = ""; };
+  $("ok").onclick = go; $("pin").onkeydown = e => { if (e.key === "Enter") go(); };
+}
+
+function boot() {
+  $("gate").style.display = "none"; $("app").style.display = "";
+  const surl = new URL("student.html", location.href); surl.search = ""; surl.searchParams.set("room", ROOM);
+  if (window.qrcode) { const q = qrcode(0, "M"); q.addData(surl.href); q.make(); $("qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 2 }); $("bqimg").innerHTML = q.createSvgTag({ cellSize: 8, margin: 2 }); }
+  else $("qr").innerHTML = "<p class='where'>QR을 만들 수 없어요(인터넷 확인). 주소를 칠판에 적어 주세요.</p>";
+  $("url").textContent = surl.href; $("bqurl").textContent = surl.href; $("bqroom").textContent = `방: ${ROOM} — 휴대폰 카메라로 찍어 접속하세요`;
+  $("bigqr").onclick = () => $("bq").classList.add("on"); $("bq").onclick = () => $("bq").classList.remove("on");
+  $("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(surl.href);
+  $("prev").onclick = () => go(D.state.step - 1); $("next").onclick = () => go(D.state.step + 1);
+  document.querySelectorAll("[data-rs]").forEach(b => b.onclick = () => { const k = b.dataset.rs; if (confirm(`${RS[k]}을(를) 모두 지울까요?`)) { DB.remove(`${ROOM}/${k}`); if (k === "entries") DB.remove(`${ROOM}/hidden`); } });
+  document.addEventListener("keydown", e => {
+    if (["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(D.state.step + 1); }
+    if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(D.state.step - 1); }
+    if (e.key === "r" || e.key === "R") toggleReveal();
+    if (e.key === "q" || e.key === "Q") $("bq").classList.toggle("on");
+    if (e.key === "p" || e.key === "P") document.body.classList.toggle("present");
+    if (e.key === "Escape") { openSid = null; render(); }
+  });
+  DB.listen(`${ROOM}/state`, v => { if (v) D.state = v; else DB.set(`${ROOM}/state`, { step: 0, reveal: false }); render(); });
+  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
+  drawSteps();
+}
+
+function go(i) { i = Math.max(0, Math.min(STEPS.length - 1, i)); if (i !== D.state.step) { openSid = null; DB.set(`${ROOM}/state`, { step: i, reveal: false }); } }
+const canReveal = s => s.t === "quiz" || s.t === "sort";
+function toggleReveal() { if (canReveal(STEPS[D.state.step])) DB.update(`${ROOM}/state`, { reveal: !D.state.reveal }); }
+
+function drawSteps() {
+  let last = "", h = "";
+  STEPS.forEach((s, i) => { if (s.sec !== last) { h += `<div class="sh">${UI.esc(s.sec)}</div>`; last = s.sec; } h += `<button data-i="${i}" class="${s.t !== "slide" ? "act" : ""}">${i + 1}. ${UI.esc(s.title)}</button>`; });
+  $("steps").innerHTML = h;
+  $("steps").querySelectorAll("button").forEach(b => b.onclick = () => go(+b.dataset.i));
+}
+
+function render() {
+  const step = STEPS[D.state.step] || STEPS[0], st = $("stage");
+  let h = "";
+  if (step.t === "slide") h = step.html;
+  else if (step.t === "quiz") h = UI.quiz(step, D, ctx);
+  else if (step.t === "quizSummary") h = UI.quizSummary(D, ctx);
+  else if (step.t === "poll") h = UI.poll(D, ctx);
+  else if (step.t === "aiface") h = UI.aiface(D, ctx);
+  else if (step.t === "sort") h = UI.sort(D, ctx);
+  else if (step.t === "cards") h = UI.cardsTeacher(D);
+  else if (step.t === "cardsResult") h = UI.cardsResult(D, ctx);
+  else if (step.t === "submit") h = UI.submitTeacher(D);
+  else if (step.t === "gallery") h = UI.gallery(D, ctx);
+  else if (step.t === "vote") h = UI.vote(D, ctx);
+  else if (step.t === "voteResult") h = UI.voteResult(D, ctx);
+  st.innerHTML = h;
+  st.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { openSid = b.dataset.open; render(); });
+  $("modal").innerHTML = openSid ? UI.modal(D, openSid, { role: "teacher" }) : "";
+  $("modal").querySelectorAll("[data-close]").forEach(b => b.onclick = ev => { if (ev.target === b) { openSid = null; render(); } });
+  $("modal").querySelectorAll("[data-hide]").forEach(b => b.onclick = () => { DB.set(`${ROOM}/hidden/${b.dataset.hide}`, true); openSid = null; render(); });
+
+  $("where").textContent = `${D.state.step + 1} / ${STEPS.length} · ${step.sec} · ${step.title}`;
+  $("ctl").innerHTML = canReveal(step) ? `<div class="row" style="margin-top:10px"><button class="btn" id="rv" style="background:${D.state.reveal ? "#5f6672" : "#d2423a"}">${D.state.reveal ? "정답 숨기기" : "정답 공개 (R)"}</button></div>` : "";
+  if ($("rv")) $("rv").onclick = toggleReveal;
+  $("steps").querySelectorAll("button").forEach(b => b.classList.toggle("cur", +b.dataset.i === D.state.step));
+  const cur = $("steps").querySelector(".cur"); if (cur) { const p = $("steps"); if (cur.offsetTop < p.scrollTop || cur.offsetTop > p.scrollTop + p.clientHeight - 30) p.scrollTop = cur.offsetTop - 60; }
+  $("joined").textContent = `참여 ${Object.keys(D.students || {}).length}명`;
+}
+gate();
+</script>
+</body>
+</html>

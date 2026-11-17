@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>팩트체크 1일차 웹앱 미리보기</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#1f2d5c;color:#fff}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;font-weight:700}
+header .sub{font-size:13px;opacity:.75}
+header .sp{flex:1}
+button{font:inherit;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;background:#2f4387;color:#fff;font-size:14px}
+button:hover{background:#3a51a0}
+button.on{background:#f2b632;color:#1f2d5c;font-weight:700}
+.tabs{display:none;gap:6px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px 300px;gap:12px;padding:0 12px 12px;height:calc(100% - 56px)}
+.pane{display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane .lab{font-size:13px;font-weight:700;margin:2px 4px 6px;display:flex;align-items:center;gap:6px}
+.pane .lab small{font-weight:400;opacity:.7}
+.box{flex:1;position:relative;overflow:hidden;border-radius:14px;background:#fff;min-height:0}
+.box iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:#fff}
+.phone .box{border-radius:26px;border:6px solid #0d1530}
+.help{font-size:12.5px;opacity:.8;margin:0 4px 0}
+@media (max-width:900px){
+  main{grid-template-columns:1fr;height:calc(100% - 100px)}
+  .tabs{display:flex;width:100%}
+  .pane{display:none}.pane.show{display:flex}
+  .pane .lab{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>팩트체크 1일차 · 웹앱 미리보기</h1>
+  <span class="sub">교사가 넘기면 학생 화면이 따라와요 (미리보기 전용 데모, 실제 수업은 Firebase 연결 필요)</span>
+  <span class="sp"></span>
+  <button id="reset">데이터 초기화</button>
+  <div class="tabs" id="tabs"><button data-p="0" class="on">교사</button><button data-p="1">학생 1</button><button data-p="2">학생 2</button></div>
+</header>
+<main>
+  <section class="pane show" data-w="1366"><div class="lab">교사 화면 <small>→ / Space 다음 · ← 이전 · R 정답 공개 · 오른쪽 목록으로 바로 이동 · 학생 화면 ☰ 목차</small></div><div class="box"><iframe src="teacher.html?hub=1" title="교사 화면"></iframe></div></section>
+  <section class="pane phone" data-w="400"><div class="lab">학생 1 <small>3 김하나</small></div><div class="box"><iframe src="student.html?hub=1&u=a&name=3%20%EA%B9%80%ED%95%98%EB%82%98" title="학생 1 화면"></iframe></div></section>
+  <section class="pane phone" data-w="400"><div class="lab">학생 2 <small>15 박세찬</small></div><div class="box"><iframe src="student.html?hub=1&u=b&name=15%20%EB%B0%95%EC%84%B8%EC%B0%AC" title="학생 2 화면"></iframe></div></section>
+</main>
+<script>
+// ----- 데이터 허브: 세 화면이 같은 데이터를 보도록 여기서 보관 -----
+const KEY = "fcd1_preview_db";
+let tree = {};
+try { tree = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) {}
+const frames = () => Array.from(document.querySelectorAll("iframe")).map(f => f.contentWindow).filter(Boolean);
+const split = p => p.split("/").filter(Boolean);
+function broadcast() {
+  frames().forEach(w => w.postMessage({ fc: "tree", tree }, "*"));
+  try { localStorage.setItem(KEY, JSON.stringify(tree)); } catch (e) {}
+}
+window.addEventListener("message", e => {
+  const m = e.data; if (!m || !m.fc) return;
+  if (m.fc === "hello") { e.source && e.source.postMessage({ fc: "tree", tree }, "*"); return; }
+  if (m.fc === "write") {
+    const ks = split(m.path); let o = tree;
+    for (let i = 0; i < ks.length - 1; i++) { if (typeof o[ks[i]] !== "object" || o[ks[i]] === null) o[ks[i]] = {}; o = o[ks[i]]; }
+    const last = ks[ks.length - 1];
+    if (m.val === null || m.val === undefined) delete o[last];
+    else if (m.merge && typeof o[last] === "object" && o[last]) Object.assign(o[last], m.val);
+    else o[last] = m.val;
+    broadcast();
+  }
+});
+document.getElementById("reset").onclick = () => { tree = {}; broadcast(); };
+
+// ----- 화면 크기 맞추기: 실제 크기로 그린 뒤 칸에 맞게 줄이기 -----
+function fit() {
+  document.querySelectorAll(".pane").forEach(p => {
+    const box = p.querySelector(".box"), f = p.querySelector("iframe");
+    const narrow = innerWidth <= 900;
+    const W = narrow && p.classList.contains("phone") ? Math.max(box.clientWidth, 360) : +p.dataset.w;
+    const s = Math.min(1, box.clientWidth / W);
+    f.style.width = W + "px"; f.style.height = (box.clientHeight / s) + "px"; f.style.transform = `scale(${s})`;
+  });
+}
+addEventListener("resize", fit); fit();
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".pane").forEach((p, i) => p.classList.toggle("show", i === +b.dataset.p));
+  fit();
+});
+</script>
+</body>
+</html>
