@@ -193,15 +193,16 @@
   }
   function modal(key, D, ctx) {
     const [id, sid] = key.split("/"); const step = idx().forms[id]; const e = posts(D, id)[sid]; if (!step || !e) return "";
-    const rows = step.fields.filter(f => !f.private || ctx.role === "teacher").map(f => {
+    const hasPriv = step.fields.some(f => f.private);
+    const rows = step.fields.filter(f => !f.private || (ctx.role === "teacher" && ctx.showPriv)).map(f => {
       const v = e[f.k]; if (v == null || v === "" || (Array.isArray(v) && !v.length)) return "";
       if (f.type === "image") return `<dt>${esc(f.label)}</dt><dd><img src="${v}" alt=""></dd>`;
       return `<dt>${esc(f.label)}</dt><dd>${Array.isArray(v) ? v.map(esc).join(" · ") : esc(v).replace(/\n/g, "<br>")}</dd>`;
     }).join("");
     const reacted = ((((D.react || {})[id] || {})[sid]) || {})[ctx.sid];
     const gs = idx().gals[id];
-    return `<div class="modal" data-close="1"><div class="sheet" onclick="event.stopPropagation()"><div class="tab">${esc(e.title || e.q || "카드")}</div><div class="card">${gs && gs.stamp ? `<span class="stamp">수업용 가짜</span>` : ""}<dl class="cardv">${rows}<dt>만든 사람</dt><dd>${esc(nameOf(D, sid) || e.name)}${e.partner ? " · " + esc(e.partner) : ""}</dd></dl>
-      <div class="actions"><button class="btn" data-close="1">닫기</button>${ctx.role === "student" && gs && gs.react && sid !== ctx.sid ? `<button class="btn ghost" data-react="${id}/${sid}">${reacted ? "😱 취소" : "😱 나도 속겠다"}</button>` : ""}${ctx.role === "teacher" ? `<button class="btn warn" data-hide2="${id}/${sid}">${hidden(D, id)[sid] ? "숨김 풀기" : "이 카드 숨기기"}</button>` : ""}</div></div></div></div>`;
+    return `<div class="modal" data-close="1"><div class="sheet" onclick="event.stopPropagation()"><div class="tab">${esc(e.title || e.q || "카드")}</div><div class="card">${gs && gs.stamp ? `<span class="stamp">수업용 가짜</span>` : ""}${ctx.role === "teacher" && hasPriv && !ctx.showPriv ? `<p class="hint">🔒 숨겨 둔 거짓·진실 칸은 TV에 보이지 않게 감춰져 있어요. 확인하려면 아래 ‘비공개 칸 보기’를 누르세요.</p>` : ""}<dl class="cardv">${rows}<dt>만든 사람</dt><dd>${esc(nameOf(D, sid) || e.name)}${e.partner ? " · " + esc(e.partner) : ""}</dd></dl>
+      <div class="actions"><button class="btn" data-close="1">닫기</button>${ctx.role === "student" && gs && gs.react && sid !== ctx.sid ? `<button class="btn ghost" data-react="${id}/${sid}">${reacted ? "😱 취소" : "😱 나도 속겠다"}</button>` : ""}${ctx.role === "teacher" && hasPriv ? `<button class="btn ghost" data-priv="1">${ctx.showPriv ? "🔒 비공개 칸 감추기" : "🔒 비공개 칸 보기"}</button>` : ""}${ctx.role === "teacher" ? `<button class="btn warn" data-hide2="${id}/${sid}">${hidden(D, id)[sid] ? "숨김 풀기" : "이 카드 숨기기"}</button>` : ""}</div></div></div></div>`;
   }
 
   // ---------- 친구 이미지 퀴즈
