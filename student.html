@@ -11,7 +11,9 @@
 <script src="config.js"></script>
 <script src="data.js"></script>
 <script src="db.js"></script>
+<script src="data2.js"></script>
 <script src="app.js"></script>
+<script src="app2.js"></script>
 </head>
 <body>
 <div class="topbar"><button class="iconbtn" id="tocb" aria-label="목차">☰ 목차</button><span class="sp"></span><span id="who" class="pill"></span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
@@ -25,7 +27,9 @@ const K = `fcd1_${ROOM}${params.get("u") ? "_" + params.get("u") : ""}`;
 let me = JSON.parse(SAFE.get(K) || "null");
 if (!me && params.get("name")) me = { sid: "p_" + (params.get("u") || "x"), name: params.get("name") };
 const D = { state: { step: 0, reveal: false } };
-let live = false, view = null, openSid = null, sig = "", seq = [], draft = {}, galleryOverlay = false;
+let live = false, view = null, openSid = null, sig = "", seq = [], draft = {}, galleryOverlay = false, editMode = false, nonce = 0;
+const CUR = () => DAY_STEPS[D.state.day || 1] || DAY_STEPS[1];
+const dDraft = id => { try { return JSON.parse(SAFE.get(K + "_d2_" + id) || "{}") || {}; } catch (e) { return {}; } };
 const $ = id => document.getElementById(id);
 const ctx = () => ({ role: "student", sid: me.sid, name: me.name });
 
@@ -47,25 +51,26 @@ function start() {
   $("tocb").style.visibility = "";
   $("who").textContent = me.name;
   DB.update(`${ROOM}/students/${me.sid}`, { name: me.name, at: DB.now() });
-  DB.listen(`${ROOM}/state`, v => { const prev = D.state.step; D.state = v || { step: 0, reveal: false }; live = true; if (prev !== D.state.step) { if (view !== null && view >= D.state.step) view = null; if (view === null) scrollTo(0, 0); } render(); });
-  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
+  DB.listen(`${ROOM}/state`, v => { const prev = D.state.step, pday = D.state.day || 1; D.state = v || { step: 0, reveal: false }; live = true; if (prev !== D.state.step || pday !== (D.state.day || 1)) { editMode = false; openSid = null; if (pday !== (D.state.day || 1) || (view !== null && view >= D.state.step)) view = null; if (view === null) scrollTo(0, 0); } render(); });
+  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden", "ans", "posts", "qa", "react", "hidden2"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; if (k === "students" && !D.students[me.sid]) DB.update(`${ROOM}/students/${me.sid}`, { name: me.name, at: DB.now() }); render(); }));
   $("tocb").onclick = () => { drawToc(); $("drawer").classList.add("on"); };
   $("bgk").onclick = () => $("drawer").classList.remove("on");
 }
 
 function drawToc() {
   const cur = D.state.step; let html = "", lastSec = "";
-  DAYS.forEach(d => {
-    html += `<div class="day ${d.detail ? "" : "off"}">${d.day}<small>${UI.esc(d.title)}</small></div>`;
-    if (!d.detail) return;
-    STEPS.forEach((s, i) => {
+  DAYS.forEach((d, di) => {
+    const detail = di + 1 === (D.state.day || 1);
+    html += `<div class="day ${detail ? "" : "off"}">${d.day}<small>${UI.esc(d.title)}</small></div>`;
+    if (!detail) return;
+    CUR().forEach((s, i) => {
       if (s.sec !== lastSec) { html += `<h4>${UI.esc(s.sec)}</h4>`; lastSec = s.sec; }
       const here = (view === null ? cur : view) === i;
       html += `<button class="it ${here ? "cur" : ""} ${s.t !== "slide" ? "act" : ""}" data-i="${i}" ${i > cur ? "disabled" : ""}>${UI.esc(s.title)}${i === cur ? " ◀ 지금" : ""}</button>`;
     });
   });
   $("toc").innerHTML = `<p class="hint">지나간 화면은 눌러서 다시 볼 수 있어요.</p>` + html;
-  $("toc").querySelectorAll("button.it").forEach(b => b.onclick = () => { const i = +b.dataset.i; view = i === D.state.step ? null : i; $("drawer").classList.remove("on"); sig = ""; scrollTo(0, 0); render(); });
+  $("toc").querySelectorAll("button.it").forEach(b => b.onclick = () => { const i = +b.dataset.i; view = i === D.state.step ? null : i; $("drawer").classList.remove("on"); sig = ""; editMode = false; openSid = null; scrollTo(0, 0); render(); });
   const c = $("toc").querySelector(".cur"); if (c) c.scrollIntoView({ block: "center" });
 }
 
@@ -143,12 +148,13 @@ function render() {
   if (!me) return;
   if (!live) { $("stage").innerHTML = `<div class="wait">선생님이 수업을 시작하기를 기다리는 중…</div>`; return; }
   const idx = view === null ? D.state.step : view;
-  const step = STEPS[idx] || STEPS[0], st = $("stage");
+  const steps = CUR(), step = steps[idx] || steps[0], st = $("stage");
   const banner = view !== null ? `<div class="review">지난 화면 다시 보기: ${UI.esc(step.title)}<span class="sp"></span><button id="back">선생님 화면으로</button></div>` : "";
   // 입력 중인 화면은 내 데이터가 바뀔 때만 다시 그리기
   let s = `${idx}|${view}`;
   if (step.t === "submit") s += `|${((D.entries || {})[me.sid] || {}).at || ""}|${(D.hidden || {})[me.sid] ? 1 : 0}`;
   if (step.t === "cards") s += `|${seq.join("")}|${((D.cards || {})[me.sid] || {}).at || ""}`;
+  if (UI2.TYPES.includes(step.t)) { renderD2(step, idx, banner, st); return; }
   if (step.t === "submit" || step.t === "cards") {
     if (s === sig) return; sig = s;
     const wrap = document.createElement("div");
@@ -180,6 +186,33 @@ function render() {
   $("modal").innerHTML = openSid && ["gallery", "vote", "voteResult"].includes(step.t) ? UI.modal(D, openSid, ctx()) : "";
   $("modal").querySelectorAll("[data-close]").forEach(b => b.onclick = ev => { if (ev.target === b) { openSid = null; render(); } });
   if ($("back")) $("back").onclick = () => { view = null; sig = ""; scrollTo(0, 0); render(); };
+}
+
+function renderD2(step, idx, banner, st) {
+  const c = Object.assign(ctx(), { edit: editMode });
+  const isInput = UI2.INPUT_TYPES.includes(step.t);
+  const mineKey = step.t === "form" ? ((((D.posts || {})[step.id] || {})[me.sid]) || {}).at + "|" + (((D.hidden2 || {})[step.id] || {})[me.sid] ? 1 : 0) : JSON.stringify(((D.ans || {})[step.id] || {})[me.sid] || null);
+  const s = `d2|${D.state.day}|${idx}|${view}|${editMode}|${nonce}|${mineKey}|${step.t === "short" ? D.state.reveal : ""}`;
+  if (isInput && s === sig) return;
+  sig = isInput ? s : "";
+  const dr = step.t === "form" ? dDraft(step.id) : null;
+  st.innerHTML = banner + UI2.render(step, D, c, dr);
+  UI2.bind(st, step, D, c, {
+    put: (path, val) => val === null ? DB.remove(`${ROOM}/${path}`) : DB.set(`${ROOM}/${path}`, val),
+    refresh: () => { nonce++; sig = ""; render(); },
+    edit: on => { editMode = on; sig = ""; render(); },
+    draft: dr || {},
+    setDraft: d => { SAFE.set(K + "_d2_" + step.id, JSON.stringify(d)); },
+    compress
+  });
+  st.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { openSid = b.dataset.open; drawModal2(); });
+  drawModal2();
+  if ($("back")) $("back").onclick = () => { view = null; sig = ""; editMode = false; scrollTo(0, 0); render(); };
+}
+function drawModal2() {
+  $("modal").innerHTML = openSid && openSid.includes("/") ? UI2.modal(openSid, D, ctx()) : "";
+  $("modal").querySelectorAll("[data-close]").forEach(b => b.onclick = ev => { if (ev.target === b) { openSid = null; drawModal2(); } });
+  $("modal").querySelectorAll("[data-react]").forEach(b => b.onclick = () => { const [id, sid] = b.dataset.react.split("/"); const on = ((((D.react || {})[id] || {})[sid]) || {})[me.sid]; on ? DB.remove(`${ROOM}/react/${id}/${sid}/${me.sid}`) : DB.set(`${ROOM}/react/${id}/${sid}/${me.sid}`, 1); });
 }
 
 try { draft = JSON.parse(SAFE.get(K + "_draft") || "{}") || {}; } catch (e) { draft = {}; }

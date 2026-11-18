@@ -151,5 +151,5 @@
     return frame("시상! 역대급 가짜뉴스", body + `<p class="hint">공동 1위는 함께 수상해요. 수상자는 30초 동안 ‘이 가짜뉴스를 고른 이유’를 발표해요.</p>`);
   }
 
-  window.UI = { esc, pct, frame, quiz, quizSummary, quizStats, poll, aiface, sort, cardScore, cardsTeacher, cardsResult, gallery, submitTeacher, vote, voteResult, modal, entryCard, entryFull, visible, isMine };
+  window.UI = { esc, pct, frame, bars, stat, quiz, quizSummary, quizStats, poll, aiface, sort, cardScore, cardsTeacher, cardsResult, gallery, submitTeacher, vote, voteResult, modal, entryCard, entryFull, visible, isMine };
 })();

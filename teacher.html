@@ -32,14 +32,17 @@
 <script src="config.js"></script>
 <script src="data.js"></script>
 <script src="db.js"></script>
+<script src="data2.js"></script>
 <script src="app.js"></script>
+<script src="app2.js"></script>
 </head>
 <body>
-<div class="topbar"><span>교사 진행 화면 · 1일차</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill" id="joined">참여 0명</span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
+<div class="topbar"><span id="ttl">교사 진행 화면</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill" id="joined">참여 0명</span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
 <div id="gate" class="stage" style="padding:40px 16px;max-width:600px"></div>
 <div class="layout" id="app" style="display:none">
   <main class="stage" id="stage"></main>
   <aside class="panel">
+    <div class="row" id="days" style="margin-bottom:8px"></div>
     <div class="nav"><button class="btn ghost" id="prev">◀ 이전</button><button class="btn" id="next">다음 ▶</button></div>
     <p class="where" id="where"></p>
     <div id="ctl"></div>
@@ -53,6 +56,7 @@
     <div class="row"><button class="btn warn" data-rs="poll">미니 설문</button><button class="btn warn" data-rs="quiz">O/X 퀴즈</button><button class="btn warn" data-rs="ai">AI 얼굴</button></div>
     <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="sort">문장 구분</button><button class="btn warn" data-rs="cards">연대기</button><button class="btn warn" data-rs="votes">투표</button></div>
     <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="entries">출품작 전체</button><button class="btn warn" data-rs="students">참여 명단</button></div>
+    <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="ans">2일차 응답</button><button class="btn warn" data-rs="posts">2일차 올린 것</button></div>
     <p class="where">단축키: → / Space 다음 · ← 이전 · R 정답 공개 · Q QR · P 패널 숨기기(TV 화면용)</p>
   </aside>
 </div>
@@ -65,7 +69,9 @@ const $ = id => document.getElementById(id);
 const D = { state: { step: 0, reveal: false } };
 let openSid = null;
 const ctx = { role: "teacher" };
-const RS = { poll: "미니 설문", quiz: "O/X 퀴즈", ai: "AI 얼굴 점수", sort: "문장 구분", cards: "연대기 제출", votes: "투표", entries: "출품작 전체", students: "참여 명단" };
+const CUR = () => DAY_STEPS[D.state.day || 1] || DAY_STEPS[1];
+let drawnDay = 0;
+const RS = { ans: "2일차 응답(단어 구름·퀴즈·미션)", posts: "2일차 올린 것(이미지 퀴즈·AI 그림·가짜 게시물)", poll: "미니 설문", quiz: "O/X 퀴즈", ai: "AI 얼굴 점수", sort: "문장 구분", cards: "연대기 제출", votes: "투표", entries: "출품작 전체", students: "참여 명단" };
 
 DB.onConnection(on => { $("conn").className = "dot" + (on ? " on" : ""); $("connt").textContent = DB.mode === "demo" ? "데모 모드" : (on ? "연결됨" : "연결 끊김"); });
 $("roomp").textContent = `방: ${ROOM}`;
@@ -88,7 +94,7 @@ function boot() {
   $("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(surl.href);
   $("rec").onclick = () => { const u = new URL("record.html", location.href); u.search = ""; u.searchParams.set("room", ROOM); window.open(u.href, "_blank"); };
   $("prev").onclick = () => go(D.state.step - 1); $("next").onclick = () => go(D.state.step + 1);
-  document.querySelectorAll("[data-rs]").forEach(b => b.onclick = () => { const k = b.dataset.rs; if (confirm(`${RS[k]}을(를) 모두 지울까요?`)) { DB.remove(`${ROOM}/${k}`); if (k === "entries") DB.remove(`${ROOM}/hidden`); } });
+  document.querySelectorAll("[data-rs]").forEach(b => b.onclick = () => { const k = b.dataset.rs; if (confirm(`${RS[k]}을(를) 모두 지울까요?`)) { DB.remove(`${ROOM}/${k}`); if (k === "entries") DB.remove(`${ROOM}/hidden`); if (k === "posts") { DB.remove(`${ROOM}/hidden2`); DB.remove(`${ROOM}/qa`); DB.remove(`${ROOM}/react`); } } });
   document.addEventListener("keydown", e => {
     if (["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
     if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(D.state.step + 1); }
@@ -99,25 +105,31 @@ function boot() {
     if (e.key === "Escape") { openSid = null; render(); }
   });
   DB.listen(`${ROOM}/state`, v => { if (v) D.state = v; else DB.set(`${ROOM}/state`, { step: 0, reveal: false }); render(); });
-  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
-  drawSteps();
+  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden", "ans", "posts", "qa", "react", "hidden2"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
+  $("days").innerHTML = DAYS.map((d, i) => DAY_STEPS[i + 1] ? `<button class="btn ghost" data-day="${i + 1}">${d.day}</button>` : "").join("");
+  $("days").querySelectorAll("[data-day]").forEach(b => b.onclick = () => { const n = +b.dataset.day; if (n !== (D.state.day || 1) && confirm(`${n}일차 수업으로 바꿀까요? 학생 화면도 ${n}일차 첫 화면으로 바뀌어요.`)) { openSid = null; DB.set(`${ROOM}/state`, { day: n, step: 0, reveal: false }); } });
 }
 
-function go(i) { i = Math.max(0, Math.min(STEPS.length - 1, i)); if (i !== D.state.step) { openSid = null; DB.set(`${ROOM}/state`, { step: i, reveal: false }); } }
-const canReveal = s => s.t === "quiz" || s.t === "sort";
-function toggleReveal() { if (canReveal(STEPS[D.state.step])) DB.update(`${ROOM}/state`, { reveal: !D.state.reveal }); }
+function go(i) { const L = CUR(); i = Math.max(0, Math.min(L.length - 1, i)); if (i !== D.state.step) { openSid = null; DB.set(`${ROOM}/state`, { day: D.state.day || 1, step: i, reveal: false }); } }
+const canReveal = s => s && (s.t === "quiz" || s.t === "sort" || UI2.REVEAL_TYPES.includes(s.t));
+function toggleReveal() { if (canReveal(CUR()[D.state.step])) DB.update(`${ROOM}/state`, { reveal: !D.state.reveal }); }
 
 function drawSteps() {
   let last = "", h = "";
-  STEPS.forEach((s, i) => { if (s.sec !== last) { h += `<div class="sh">${UI.esc(s.sec)}</div>`; last = s.sec; } h += `<button data-i="${i}" class="${s.t !== "slide" ? "act" : ""}">${i + 1}. ${UI.esc(s.title)}</button>`; });
+  drawnDay = D.state.day || 1;
+  CUR().forEach((s, i) => { if (s.sec !== last) { h += `<div class="sh">${UI.esc(s.sec)}</div>`; last = s.sec; } h += `<button data-i="${i}" class="${s.t !== "slide" ? "act" : ""}">${i + 1}. ${UI.esc(s.title)}</button>`; });
   $("steps").innerHTML = h;
   $("steps").querySelectorAll("button").forEach(b => b.onclick = () => go(+b.dataset.i));
 }
 
 function render() {
-  const step = STEPS[D.state.step] || STEPS[0], st = $("stage");
+  if (drawnDay !== (D.state.day || 1)) drawSteps();
+  const L = CUR(), step = L[D.state.step] || L[0], st = $("stage");
+  $("ttl").textContent = `교사 진행 화면 · ${D.state.day || 1}일차`;
+  $("days").querySelectorAll("[data-day]").forEach(b => { const on = +b.dataset.day === (D.state.day || 1); b.className = on ? "btn" : "btn ghost"; });
   let h = "";
-  if (step.t === "slide") h = step.html;
+  if (UI2.TYPES.includes(step.t)) h = UI2.render(step, D, { role: "teacher" });
+  else if (step.t === "slide") h = step.html;
   else if (step.t === "quiz") h = UI.quiz(step, D, ctx);
   else if (step.t === "quizSummary") h = UI.quizSummary(D, ctx);
   else if (step.t === "poll") h = UI.poll(D, ctx);
@@ -131,11 +143,12 @@ function render() {
   else if (step.t === "voteResult") h = UI.voteResult(D, ctx);
   st.innerHTML = h;
   st.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { openSid = b.dataset.open; render(); });
-  $("modal").innerHTML = openSid ? UI.modal(D, openSid, { role: "teacher" }) : "";
+  $("modal").innerHTML = openSid ? (openSid.includes("/") ? UI2.modal(openSid, D, { role: "teacher" }) : UI.modal(D, openSid, { role: "teacher" })) : "";
+  $("modal").querySelectorAll("[data-hide2]").forEach(b => b.onclick = () => { const [id, sid] = b.dataset.hide2.split("/"); const on = ((D.hidden2 || {})[id] || {})[sid]; on ? DB.remove(`${ROOM}/hidden2/${id}/${sid}`) : DB.set(`${ROOM}/hidden2/${id}/${sid}`, true); openSid = null; render(); });
   $("modal").querySelectorAll("[data-close]").forEach(b => b.onclick = ev => { if (ev.target === b) { openSid = null; render(); } });
   $("modal").querySelectorAll("[data-hide]").forEach(b => b.onclick = () => { DB.set(`${ROOM}/hidden/${b.dataset.hide}`, true); openSid = null; render(); });
 
-  $("where").textContent = `${D.state.step + 1} / ${STEPS.length} · ${step.sec} · ${step.title}`;
+  $("where").textContent = `${D.state.day || 1}일차 · ${D.state.step + 1} / ${L.length} · ${step.sec} · ${step.title}`;
   $("ctl").innerHTML = canReveal(step) ? `<div class="row" style="margin-top:10px"><button class="btn" id="rv" style="background:${D.state.reveal ? "#5f6672" : "#d2423a"}">${D.state.reveal ? "정답 숨기기" : "정답 공개 (R)"}</button></div>` : "";
   if ($("rv")) $("rv").onclick = toggleReveal;
   $("steps").querySelectorAll("button").forEach(b => b.classList.toggle("cur", +b.dataset.i === D.state.step));

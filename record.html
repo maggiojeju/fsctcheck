@@ -37,7 +37,9 @@
 <script src="config.js"></script>
 <script src="data.js"></script>
 <script src="db.js"></script>
+<script src="data2.js"></script>
 <script src="app.js"></script>
+<script src="app2.js"></script>
 </head>
 <body>
 <div class="topbar"><span>수업 기록 · 1일차</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
@@ -53,6 +55,12 @@
   <div class="pagebreak"></div>
   <h2 id="enth">출품 카드</h2>
   <div id="entries"></div>
+  <div class="pagebreak"></div>
+  <h2 id="fph">2일차 가짜 게시물</h2>
+  <p class="note">🔒 비공개 칸(숨겨 둔 거짓, 진실과 근거)까지 모두 보여요. 3일차 팩트체크 배틀 정답지로 쓰세요.</p>
+  <div id="fakeposts"></div>
+  <h2 id="aih">2일차 AI 그림과 검증 결과</h2>
+  <div id="aiimgs"></div>
 </div>
 <script>
 const params = new URLSearchParams(location.search);
@@ -72,7 +80,7 @@ function gate() {
 }
 function boot() {
   $("gate").style.display = "none"; $("app").style.display = "";
-  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
+  ["students", "quiz", "poll", "ai", "sort", "cards", "entries", "votes", "hidden", "ans", "posts", "react", "hidden2", "qa"].forEach(k => DB.listen(`${ROOM}/${k}`, v => { D[k] = v || {}; render(); }));
   $("print").onclick = () => window.print();
   $("csv").onclick = downloadCsv;
   $("showHidden").onchange = render;
@@ -81,6 +89,7 @@ function boot() {
 function rows() {
   const S = D.students || {}, ids = new Set(Object.keys(S));
   ["poll", "ai", "sort", "cards", "entries", "votes"].forEach(k => Object.keys(D[k] || {}).forEach(id => ids.add(id)));
+  Object.values(D.ans || {}).concat(Object.values(D.posts || {})).forEach(m => Object.keys(m || {}).forEach(id => ids.add(id)));
   Object.values(D.quiz || {}).forEach(q => Object.keys(q || {}).forEach(id => ids.add(id)));
   const qs = UI.quizStats(D);
   const partnerOf = name => Object.values(D.entries || {}).some(e => (e.partner || "").trim() && e.partner.trim() === (name || "").trim());
@@ -94,14 +103,15 @@ function rows() {
     const entry = (D.entries || {})[id] ? 1 : (partnerOf(name) ? 1 : 0);
     const voteN = Object.keys((D.votes || {})[id] || {}).length;
     const total = poll + quizN + ai + sortN + card + entry + voteN;
-    return { name, poll, quizN, quizScore: qs.by[id] || 0, ai, sortN, card, cardScore: card ? UI.cardScore(D.cards[id].order) : null, entry, entryBy: (D.entries || {})[id] ? "직접" : (entry ? "짝" : ""), voteN, total };
+    const d2 = Object.values(D.ans || {}).filter(m => m && m[id] != null).length + Object.values(D.posts || {}).filter(m => m && m[id]).length + Object.values(D.qa || {}).filter(m => m && m[id] != null).length;
+    return { name, poll, quizN, quizScore: qs.by[id] || 0, ai, sortN, card, cardScore: card ? UI.cardScore(D.cards[id].order) : null, entry, entryBy: (D.entries || {})[id] ? "직접" : (entry ? "짝" : ""), voteN, total, d2 };
   }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ko", { numeric: true }));
 }
 
 function render() {
   const R = rows();
-  $("part").innerHTML = R.length ? `<table class="part"><tr><th>순</th><th>이름</th><th>합계<br><small>/23</small></th><th>미니설문<br><small>/1</small></th><th>O/X 퀴즈<br><small>응답/10 (맞힘)</small></th><th>AI 얼굴<br><small>/1</small></th><th>문장 구분<br><small>/6</small></th><th>연대기<br><small>/1 (점수)</small></th><th>출품<br><small>/1</small></th><th>투표<br><small>/3</small></th></tr>
-    ${R.map((r, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(r.name)}</td><td class="tot">${r.total}</td><td>${r.poll ? "○" : "-"}</td><td>${r.quizN} (${r.quizScore})</td><td>${r.ai ? "○" : "-"}</td><td>${r.sortN}</td><td>${r.card ? `○ (${r.cardScore})` : "-"}</td><td>${r.entry ? `○${r.entryBy === "짝" ? " 짝" : ""}` : "-"}</td><td>${r.voteN}</td></tr>`).join("")}</table>` : `<p class="note">아직 기록이 없어요.</p>`;
+  $("part").innerHTML = R.length ? `<table class="part"><tr><th>순</th><th>이름</th><th>합계<br><small>/23</small></th><th>미니설문<br><small>/1</small></th><th>O/X 퀴즈<br><small>응답/10 (맞힘)</small></th><th>AI 얼굴<br><small>/1</small></th><th>문장 구분<br><small>/6</small></th><th>연대기<br><small>/1 (점수)</small></th><th>출품<br><small>/1</small></th><th>투표<br><small>/3</small></th><th>2일차<br><small>활동 수</small></th></tr>
+    ${R.map((r, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(r.name)}</td><td class="tot">${r.total}</td><td>${r.poll ? "○" : "-"}</td><td>${r.quizN} (${r.quizScore})</td><td>${r.ai ? "○" : "-"}</td><td>${r.sortN}</td><td>${r.card ? `○ (${r.cardScore})` : "-"}</td><td>${r.entry ? `○${r.entryBy === "짝" ? " 짝" : ""}` : "-"}</td><td>${r.voteN}</td><td>${r.d2}</td></tr>`).join("")}</table>` : `<p class="note">아직 기록이 없어요.</p>`;
 
   const showHidden = $("showHidden").checked, ent = D.entries || {}, hid = D.hidden || {};
   const got = {}; Object.values(D.votes || {}).forEach(v => AWARDS.forEach(([k]) => { if (v && v[k]) { got[v[k]] = got[v[k]] || {}; got[v[k]][k] = (got[v[k]][k] || 0) + 1; } }));
@@ -113,12 +123,25 @@ function render() {
       <div class="meta">${esc(e.name)}${e.partner ? " · " + esc(e.partner) : ""} · ${e.at ? new Date(e.at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : ""}</div>
       ${aw ? `<div>${aw}</div>` : ""}${UI.entryFull ? UI.entryFull(e) : ""}</div>`;
   }).join("") || `<p class="note">출품작이 없어요.</p>`;
+  const d2list = (id, el, head) => {
+    const step = (DAY_STEPS[2] || []).find(x => x.t === "form" && x.id === id); if (!step) return;
+    const P = (D.posts || {})[id] || {}, H = (D.hidden2 || {})[id] || {};
+    const list = Object.entries(P).filter(([sid]) => showHidden || !H[sid]).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+    $(head).textContent = $(head).textContent.replace(/ \(\d+개\)$/, "") + ` (${list.length}개)`;
+    $(el).innerHTML = list.map(([sid, e], i) => {
+      const rc = Object.keys((((D.react || {})[id] || {})[sid]) || {}).length;
+      const rows = step.fields.map(f => { const v = e[f.k]; if (v == null || v === "" || (Array.isArray(v) && !v.length)) return ""; return f.type === "image" ? `<dt>${esc(f.label)}</dt><dd><img src="${v}" alt=""></dd>` : `<dt>${esc(f.label)}</dt><dd>${Array.isArray(v) ? v.map(esc).join(" · ") : esc(v).replace(/\n/g, "<br>")}</dd>`; }).join("");
+      return `<div class="pc"><h3>${i + 1}. ${esc(e.title || e.prompt || "")}${H[sid] ? " <small style='color:#d2423a'>(숨김)</small>" : ""}</h3><div class="meta">${esc(e.name || "")}${e.partner ? " · " + esc(e.partner) : ""}${rc ? ` · 😱 ${rc}명` : ""}</div><dl class="cardv">${rows}</dl></div>`;
+    }).join("") || `<p class="note">없어요.</p>`;
+  };
+  d2list("fakepost", "fakeposts", "fph");
+  d2list("aiimg", "aiimgs", "aih");
 }
 
 function downloadCsv() {
-  const R = rows(), head = ["순위", "이름", "합계(/23)", "미니설문", "OX응답(/10)", "OX맞힘", "AI얼굴", "문장구분(/6)", "연대기제출", "연대기점수", "출품", "투표(/3)"];
+  const R = rows(), head = ["순위", "이름", "합계(/23)", "미니설문", "OX응답(/10)", "OX맞힘", "AI얼굴", "문장구분(/6)", "연대기제출", "연대기점수", "출품", "투표(/3)", "2일차 활동 수"];
   const q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
-  const lines = [head.map(q).join(",")].concat(R.map((r, i) => [i + 1, r.name, r.total, r.poll, r.quizN, r.quizScore, r.ai, r.sortN, r.card, r.cardScore == null ? "" : r.cardScore, r.entry ? (r.entryBy || "직접") : "", r.voteN].map(q).join(",")));
+  const lines = [head.map(q).join(",")].concat(R.map((r, i) => [i + 1, r.name, r.total, r.poll, r.quizN, r.quizScore, r.ai, r.sortN, r.card, r.cardScore == null ? "" : r.cardScore, r.entry ? (r.entryBy || "직접") : "", r.voteN, r.d2].map(q).join(",")));
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `팩트체크_1일차_참여현황_${ROOM}.csv`; a.click();
 }
