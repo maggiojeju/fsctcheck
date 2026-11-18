@@ -103,9 +103,9 @@
       const r = mine[i];
       return `<div class="qitem"><div class="t"><span class="opb">${esc(m.op)}</span> ${esc(m.title)}</div><p>${m.task}</p>
         <div class="blank"><input type="text" class="opq" data-i="${i}" maxlength="80" value="${esc((r && r.q) || "")}" placeholder="검색어를 그대로 써 보세요" ${r && r.ok ? "disabled" : ""}><button class="btn" data-op="${i}" ${r && r.ok ? "disabled" : ""}>확인</button></div>
-        ${r ? (r.ok ? `<div class="verdict ok">✓ 좋아요! ${esc(m.ex)} 실제로 검색해서 결과도 확인해 보세요.</div>` : `<div class="verdict no">연산자 <b>${esc(m.op)}</b> 를 넣었는지 확인해 보세요.</div>`) : ""}</div>`;
+        ${r ? (r.ok ? `<div class="verdict ok">✓ 좋아요! ${esc(m.ex)}<div class="actions" style="margin:8px 0 0">${m.op === "+" ? `<a class="btn" href="https://search.naver.com/search.naver?query=${encodeURIComponent(r.q)}" target="_blank" rel="noopener">네이버에서 이 검색어로 검색 ↗</a>` : `<a class="btn" href="https://www.google.com/search?q=${encodeURIComponent(r.q)}" target="_blank" rel="noopener">구글에서 이 검색어로 검색 ↗</a>`}</div><small>결과를 보고, 연산자가 없을 때와 무엇이 다른지 비교해 보세요.</small></div>` : `<div class="verdict no">연산자 <b>${esc(m.op)}</b> 를 넣었는지 확인해 보세요.</div>`) : ""}</div>`;
     }).join("");
-    return frame("검색 연산자 미션 7개", `<div class="stats">${stat("완료", `${n}<small> / ${step.missions.length}</small>`)}</div>${body}`);
+    return frame("검색 연산자 미션 7개", `<div class="sub">검색어를 쓰고 ‘확인’ → 연산자가 맞으면 버튼 하나로 구글(또는 네이버)에서 바로 검색돼요. 복사해서 붙여 넣을 필요 없어요.</div><div class="stats">${stat("완료", `${n}<small> / ${step.missions.length}</small>`)}</div>${body}`);
   }
 
   // ---------- 자유 입력 목록
