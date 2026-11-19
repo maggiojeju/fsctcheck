@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>수업용 가짜 사이트</title>
+<style>
+  html,body{margin:0;height:100%;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
+  body{display:flex;flex-direction:column}
+  .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff4d6;border-bottom:3px solid #d2423a;padding:8px 12px;font-size:14px}
+  .bar b{color:#d2423a}.bar .sp{flex:1}.bar small{color:#5f6b85}
+  .bar button{font:inherit;border:2px solid #2f5bd3;background:#fff;color:#2f5bd3;border-radius:10px;padding:5px 10px;cursor:pointer;font-weight:700}
+  main{flex:1;position:relative;min-height:0}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+  .msg{padding:40px 20px;text-align:center;color:#5f6b85}
+</style>
+<script>window.SAFE={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="config.js"></script>
+<script src="db.js"></script>
+</head>
+<body>
+<div class="bar"><b>⚠️ 수업용 가짜 사이트 · 실제 뉴스가 아니에요</b><span id="who"></span><span class="sp"></span><small>효돈중 팩트체크 수업에서 학생이 만든 연습 작품</small><button id="cp">🔗 주소 복사</button></div>
+<main id="main"><p class="msg">사이트를 불러오는 중…</p></main>
+<script>
+const params = new URLSearchParams(location.search);
+const ROOM = params.get("room") || DEFAULT_ROOM, SID = params.get("sid") || "";
+const BADGE = '<div style="position:fixed;right:8px;bottom:8px;z-index:2147483647;background:#d2423a;color:#fff;font:700 12px/1.2 sans-serif;padding:5px 9px;border-radius:8px;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.3)">수업용 가짜 사이트</div>';
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function once(path) { return new Promise(res => { let done = false, off = null; off = DB.listen(`${ROOM}/${path}`, v => { if (done) return; done = true; res(v); if (off) setTimeout(() => off(), 0); }); if (done && off) off(); }); }
+document.getElementById("cp").onclick = e => { navigator.clipboard && navigator.clipboard.writeText(location.href).then(() => { e.target.textContent = "✓ 복사했어요"; }); };
+(async () => {
+  if (!/^[\w-]+$/.test(SID)) { document.getElementById("main").innerHTML = '<p class="msg">주소가 올바르지 않아요.</p>'; return; }
+  const [meta, code, hidden] = await Promise.all([once(`ans/site/${SID}`), once(`blob/site/${SID}`), once(`hidden2/site/${SID}`)]);
+  if (!meta || !code || hidden) { document.getElementById("main").innerHTML = '<p class="msg">사이트를 찾을 수 없어요. (지워졌거나 선생님이 숨긴 사이트예요)</p>'; return; }
+  document.title = `[수업용 가짜] ${meta.title}`;
+  document.getElementById("who").innerHTML = `${esc(meta.title)} · ${esc(meta.name || "")}`;
+  const SHIM = `<script>(function(){function M(){var d={};return{getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},setItem:function(k,v){d[k]=String(v)},removeItem:function(k){delete d[k]},clear:function(){d={}},key:function(i){return Object.keys(d)[i]||null},get length(){return Object.keys(d).length}}}["localStorage","sessionStorage"].forEach(function(n){try{window[n].length}catch(e){try{Object.defineProperty(window,n,{value:M(),configurable:true})}catch(e2){}}})})();<\/script>`;
+  let c = String(code); const lo = c.toLowerCase(), h = lo.indexOf("<head"), he = h >= 0 ? lo.indexOf(">", h) : -1;
+  c = he >= 0 ? c.slice(0, he + 1) + SHIM + c.slice(he + 1) : SHIM + c;
+  const i = c.toLowerCase().lastIndexOf("</body>");
+  const f = document.createElement("iframe");
+  f.setAttribute("sandbox", "allow-scripts");
+  f.srcdoc = i >= 0 ? c.slice(0, i) + BADGE + c.slice(i) : c + BADGE;
+  const m = document.getElementById("main"); m.innerHTML = ""; m.appendChild(f);
+})();
+</script>
+</body>
+</html>

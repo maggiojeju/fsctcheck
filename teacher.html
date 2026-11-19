@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>속지 말고 잡아라! 팩트체크 — 교사 진행 화면 (1일차)</title>
+<title>속지 말고 잡아라! 팩트체크 — 교사 진행 화면</title>
 <link rel="stylesheet" href="style.css">
 <style>
   .layout{display:grid;grid-template-columns:1fr 330px;gap:14px;padding:14px;align-items:start}
@@ -35,6 +35,8 @@
 <script src="data2.js"></script>
 <script src="app.js"></script>
 <script src="app2.js"></script>
+<script src="data3.js"></script>
+<script src="app3.js"></script>
 </head>
 <body>
 <div class="topbar"><span id="ttl">교사 진행 화면</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill" id="joined">참여 0명</span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
@@ -57,6 +59,7 @@
     <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="sort">문장 구분</button><button class="btn warn" data-rs="cards">연대기</button><button class="btn warn" data-rs="votes">투표</button></div>
     <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="entries">출품작 전체</button><button class="btn warn" data-rs="students">참여 명단</button></div>
     <div class="row" style="margin-top:6px"><button class="btn warn" data-rs="ans">2일차 응답</button><button class="btn warn" data-rs="posts">2일차 올린 것</button></div>
+    <div class="row" style="margin-top:6px"><button class="btn warn" id="rs3">3일차 응답 · 올린 것 전체</button></div>
     <p class="where">단축키: → / Space 다음 · ← 이전 · R 정답 공개 · Q QR · P 패널 숨기기(TV 화면용)</p>
   </aside>
 </div>
@@ -93,6 +96,7 @@ function boot() {
   $("bigqr").onclick = () => $("bq").classList.add("on"); $("bq").onclick = () => $("bq").classList.remove("on");
   $("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(surl.href);
   $("rec").onclick = () => { const u = new URL("record.html", location.href); u.search = ""; u.searchParams.set("room", ROOM); window.open(u.href, "_blank"); };
+  $("rs3").onclick = () => { if (confirm("3일차 응답과 올린 것(사이트·보고서·카드뉴스·투표·시상)을 모두 지울까요?")) UI3.reset3(); };
   $("prev").onclick = () => go(D.state.step - 1); $("next").onclick = () => go(D.state.step + 1);
   document.querySelectorAll("[data-rs]").forEach(b => b.onclick = () => { const k = b.dataset.rs; if (confirm(`${RS[k]}을(를) 모두 지울까요?`)) { DB.remove(`${ROOM}/${k}`); if (k === "entries") DB.remove(`${ROOM}/hidden`); if (k === "posts") { DB.remove(`${ROOM}/hidden2`); DB.remove(`${ROOM}/qa`); DB.remove(`${ROOM}/react`); } } });
   document.addEventListener("keydown", e => {
@@ -151,7 +155,7 @@ function render() {
   $("modal").querySelectorAll("[data-hide]").forEach(b => b.onclick = () => { DB.set(`${ROOM}/hidden/${b.dataset.hide}`, true); openSid = null; render(); });
 
   $("where").textContent = `${D.state.day || 1}일차 · ${D.state.step + 1} / ${L.length} · ${step.sec} · ${step.title}`;
-  $("ctl").innerHTML = canReveal(step) ? `<div class="row" style="margin-top:10px"><button class="btn" id="rv" style="background:${D.state.reveal ? "#5f6672" : "#d2423a"}">${D.state.reveal ? "정답 숨기기" : "정답 공개 (R)"}</button></div>` : "";
+  $("ctl").innerHTML = canReveal(step) ? `<div class="row" style="margin-top:10px"><button class="btn" id="rv" style="background:${D.state.reveal ? "#5f6672" : "#d2423a"}">${["cardresult", "award3"].includes(step.t) ? (D.state.reveal ? "발표 숨기기" : "발표하기 (R)") : (D.state.reveal ? "정답 숨기기" : "정답 공개 (R)")}</button></div>` : "";
   if ($("rv")) $("rv").onclick = toggleReveal;
   $("steps").querySelectorAll("button").forEach(b => b.classList.toggle("cur", +b.dataset.i === D.state.step));
   const cur = $("steps").querySelector(".cur"); if (cur) { const p = $("steps"); if (cur.offsetTop < p.scrollTop || cur.offsetTop > p.scrollTop + p.clientHeight - 30) p.scrollTop = cur.offsetTop - 60; }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>팩트체크 1일차 — 수업 기록</title>
+<title>팩트체크 1~3일차 — 수업 기록</title>
 <link rel="stylesheet" href="style.css">
 <style>
   body{background:#f3f5fb}
@@ -40,12 +40,14 @@
 <script src="data2.js"></script>
 <script src="app.js"></script>
 <script src="app2.js"></script>
+<script src="data3.js"></script>
+<script src="app3.js"></script>
 </head>
 <body>
-<div class="topbar"><span>수업 기록 · 1일차</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
+<div class="topbar"><span>수업 기록 · 1~3일차</span><span class="pill" id="roomp"></span><span class="sp"></span><span class="pill"><span id="conn" class="dot"></span><span id="connt">연결 중</span></span></div>
 <div class="wrap" id="gate"></div>
 <div class="wrap" id="app" style="display:none">
-  <h1>팩트체크 1일차 수업 기록 <small id="date" style="font-size:15px;color:var(--muted)"></small></h1>
+  <h1>팩트체크 수업 기록 <small id="date" style="font-size:15px;color:var(--muted)"></small></h1>
   <div class="tools"><button class="btn" id="print">인쇄 · PDF로 저장</button><button class="btn ghost" id="csv">참여 현황 엑셀(CSV) 받기</button>
     <label><input type="checkbox" id="showHidden"> 숨긴 출품작도 포함</label></div>
   <p class="note noprint">인쇄 창에서 대상(프린터)을 ‘PDF로 저장’으로 고르면 파일로 남길 수 있어요. 참여 현황은 첫 쪽, 출품 카드는 다음 쪽부터 나와요.</p>
@@ -61,6 +63,19 @@
   <div id="fakeposts"></div>
   <h2 id="aih">2일차 AI 그림과 검증 결과</h2>
   <div id="aiimgs"></div>
+  <div class="pagebreak"></div>
+  <h2>3일 참여 종합 (웹앱 참여왕 참고)</h2>
+  <p class="note">합계 = 1~3일차 웹앱 활동 수(코드 실습은 미션 수), 같으면 퀴즈 정답 수로 순위를 정해요.</p>
+  <div id="part3"></div>
+  <h2 id="sith">3일차 가짜 뉴스 사이트</h2>
+  <p class="note">🔒 숨겨 둔 거짓과 진실까지 보여요. 사이트 주소를 누르면 열려요.</p>
+  <div id="sites3"></div>
+  <h2 id="cdh">3일차 카드뉴스와 득표</h2>
+  <div id="cards3"></div>
+  <div class="pagebreak"></div>
+  <h2 id="rph">3일차 팩트체크 보고서</h2>
+  <p class="note noprint">보고서마다 새 쪽에서 시작해요.</p>
+  <div id="reports3"></div>
 </div>
 <script>
 const params = new URLSearchParams(location.search);
@@ -89,7 +104,8 @@ function boot() {
 function rows() {
   const S = D.students || {}, ids = new Set(Object.keys(S));
   ["poll", "ai", "sort", "cards", "entries", "votes"].forEach(k => Object.keys(D[k] || {}).forEach(id => ids.add(id)));
-  Object.values(D.ans || {}).concat(Object.values(D.posts || {})).forEach(m => Object.keys(m || {}).forEach(id => ids.add(id)));
+  Object.entries(D.ans || {}).filter(([k]) => k !== "award3").map(([, m]) => m).concat(Object.values(D.posts || {})).forEach(m => Object.keys(m || {}).forEach(id => ids.add(id)));
+  const d2ids = new Set((DAY_STEPS[2] || []).filter(s => s.id).map(s => s.id));
   Object.values(D.quiz || {}).forEach(q => Object.keys(q || {}).forEach(id => ids.add(id)));
   const qs = UI.quizStats(D);
   const partnerOf = name => Object.values(D.entries || {}).some(e => (e.partner || "").trim() && e.partner.trim() === (name || "").trim());
@@ -103,7 +119,7 @@ function rows() {
     const entry = (D.entries || {})[id] ? 1 : (partnerOf(name) ? 1 : 0);
     const voteN = Object.keys((D.votes || {})[id] || {}).length;
     const total = poll + quizN + ai + sortN + card + entry + voteN;
-    const d2 = Object.values(D.ans || {}).filter(m => m && m[id] != null).length + Object.values(D.posts || {}).filter(m => m && m[id]).length + Object.values(D.qa || {}).filter(m => m && m[id] != null).length;
+    const d2 = [...d2ids].reduce((n, k) => n + ((((D.ans || {})[k] || {})[id] != null) ? 1 : 0) + ((((D.posts || {})[k] || {})[id]) ? 1 : 0), 0) + Object.values(D.qa || {}).filter(m => m && m[id] != null).length;
     return { name, poll, quizN, quizScore: qs.by[id] || 0, ai, sortN, card, cardScore: card ? UI.cardScore(D.cards[id].order) : null, entry, entryBy: (D.entries || {})[id] ? "직접" : (entry ? "짝" : ""), voteN, total, d2 };
   }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ko", { numeric: true }));
 }
@@ -136,6 +152,24 @@ function render() {
   };
   d2list("fakepost", "fakeposts", "fph");
   d2list("aiimg", "aiimgs", "aih");
+  render3(showHidden);
+}
+function render3(showHidden) {
+  if (!window.UI3) return;
+  const A = id => ((D.ans || {})[id]) || {}, H = id => ((D.hidden2 || {})[id]) || {}, nm = sid => ((D.students || {})[sid] || {}).name || "";
+  const R = UI3.partRows(D);
+  $("part3").innerHTML = R.length ? `<table class="part"><tr><th>순</th><th>이름</th><th>1일차</th><th>2일차</th><th>3일차</th><th>합계</th><th>퀴즈 정답</th></tr>${R.map((r, i) => `<tr><td>${i + 1}</td><td class="nm">${esc(r.name)}</td><td>${r.d1}</td><td>${r.d2}</td><td>${r.d3}</td><td class="tot">${r.total}</td><td>${r.ok}</td></tr>`).join("")}</table>` : `<p class="note">아직 기록이 없어요.</p>`;
+  const surl = sid => { const u = new URL("site.html", location.href); u.search = ""; u.searchParams.set("room", ROOM); u.searchParams.set("sid", sid); return u.href; };
+  const sites = Object.entries(A("site")).filter(([sid, e]) => e && e.title && (showHidden || !H("site")[sid])).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+  $("sith").textContent = `3일차 가짜 뉴스 사이트 (${sites.length}개)`;
+  $("sites3").innerHTML = sites.map(([sid, e], i) => `<div class="pc"><h3>${i + 1}. ${esc(e.title)} — ${esc(e.headline)}</h3><div class="meta">${esc(nm(sid) || e.name)} · <a href="${esc(surl(sid))}" target="_blank" rel="noopener">${esc(surl(sid))}</a></div><dl class="cardv"><dt>속임수</dt><dd>${(e.tricks || []).map(esc).join(" · ")}</dd><dt>🔒 숨겨 둔 거짓</dt><dd>${esc(e.lie)}</dd><dt>🔒 진실과 근거</dt><dd>${esc(e.truth)}</dd></dl></div>`).join("") || `<p class="note">없어요.</p>`;
+  const cnt = {}; Object.values(A("cvote")).forEach(s => { if (s) cnt[s] = (cnt[s] || 0) + 1; });
+  const cards = Object.entries(A("cardup")).filter(([sid, e]) => e && e.cover && (showHidden || !H("cardup")[sid])).sort((a, b) => (cnt[b[0]] || 0) - (cnt[a[0]] || 0));
+  $("cdh").textContent = `3일차 카드뉴스와 득표 (${cards.length}개)`;
+  $("cards3").innerHTML = cards.length ? `<div class="gal">${cards.map(([sid, e]) => `<div class="ent"><img src="${e.cover}" alt=""><div class="b"><div class="k">${esc(e.verdict || "")} · ${cnt[sid] || 0}표</div><div class="tt">${esc(e.title)}</div><div class="nm">${esc(nm(sid) || e.name)} · ${e.n}장</div></div></div>`).join("")}</div>` : `<p class="note">없어요.</p>`;
+  const reps = Object.entries(A("report")).filter(([, e]) => e && e.claim).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+  $("rph").textContent = `3일차 팩트체크 보고서 (${reps.length}개)`;
+  $("reports3").innerHTML = `<style>${UI3.RP_CSS}.rpw{margin:12px 0;page-break-before:always;break-before:page}.rpw:first-of-type{page-break-before:auto;break-before:auto}.rpw .x3rp{border:1px solid #d9e1f2;max-width:100%}@media print{.rpw .x3rp{border:0}}</style>` + (reps.map(([sid, e]) => `<div class="rpw">${UI3.reportHtml(e, nm(sid) || e.name)}</div>`).join("") || `<p class="note">없어요.</p>`);
 }
 
 function downloadCsv() {
