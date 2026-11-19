@@ -157,8 +157,9 @@
     const v = k => esc(e[k] || "");
     const fields = step.fields.map(f => {
       const lab = `<label>${esc(f.label)}${f.req ? " *" : ""}</label>`;
-      if (f.type === "text") return lab + `<input type="text" data-f="${f.k}" maxlength="${f.max || 100}" value="${v(f.k)}" placeholder="${esc(f.ph || "")}">`;
-      if (f.type === "textarea") return lab + `<textarea data-f="${f.k}" maxlength="${f.max || 500}">${v(f.k)}</textarea>`;
+      const cnt = mx => `<div class="cnt" data-cnt="${f.k}">${String(e[f.k] || "").length} / ${mx}자</div>`;
+      if (f.type === "text") { const mx = f.max || 200; return lab + `<input type="text" data-f="${f.k}" maxlength="${mx}" value="${v(f.k)}" placeholder="${esc(f.ph || "")}">` + cnt(mx); }
+      if (f.type === "textarea") { const mx = f.max || 2000; return lab + `<textarea data-f="${f.k}" maxlength="${mx}" rows="5">${v(f.k)}</textarea>` + cnt(mx); }
       if (f.type === "select") return lab + `<select data-f="${f.k}">${f.opts.map(o => `<option ${e[f.k] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
       if (f.type === "checks") return lab + `<div class="checks">${f.opts.map(o => `<label><input type="checkbox" data-c="${f.k}" value="${esc(o)}" ${(e[f.k] || []).includes(o) ? "checked" : ""}> ${esc(o)}</label>`).join("")}</div>`;
       if (f.type === "image") return lab + `<input type="file" data-img="${f.k}" accept="image/*">${e[f.k] ? `<img class="preview" src="${e[f.k]}" alt="">` : ""}`;
@@ -269,6 +270,7 @@
     if (step.t === "form") {
       const collect = () => { const d = Object.assign({}, api.draft); q("[data-f]").forEach(i => d[i.dataset.f] = i.value); step.fields.filter(f => f.type === "checks").forEach(f => d[f.k] = q(`[data-c="${f.k}"]`).filter(c => c.checked).map(c => c.value)); api.setDraft(d); return d; };
       q("[data-f],[data-c]").forEach(i => i.addEventListener("input", collect));
+      q("[data-f]").forEach(i => i.addEventListener("input", () => { const c = root.querySelector(`[data-cnt="${i.dataset.f}"]`); if (c) { const mx = i.getAttribute("maxlength"); c.textContent = `${i.value.length} / ${mx}자`; c.classList.toggle("full", i.value.length >= +mx); } }));
       q("[data-img]").forEach(i => i.onchange = async ev => { const f = ev.target.files[0]; if (!f) return; const m = root.querySelector("#fmsg"); if (m) m.textContent = "이미지 줄이는 중…"; try { const d = collect(); d[i.dataset.img] = await api.compress(f); api.setDraft(d); api.refresh(); } catch (e) { if (m) m.textContent = "이 이미지는 열 수 없어요. JPG나 PNG를 골라 주세요."; } });
       q("[data-act=fmsend]").forEach(b => b.onclick = () => {
         const d = Object.assign({}, posts(D, step.id)[ctx.sid] || {}, collect());

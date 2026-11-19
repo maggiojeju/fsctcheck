@@ -176,7 +176,7 @@
     { sec: S4, title: "가짜 게시물 만들기", t: "form", id: "fakepost", title2: "가짜 게시물 만들기", desc: "비공개 칸(🔒)은 선생님만 볼 수 있어요. 3일차 배틀에서 친구들이 찾아낼 거예요.", fields: [
       { k: "kind", label: "형식", type: "select", opts: ["뉴스 기사", "SNS 게시물", "단톡방 메시지", "유튜브 썸네일·영상 소개"], req: true },
       { k: "title", label: "제목 (또는 첫 문장)", type: "text", req: true },
-      { k: "body", label: "본문", type: "textarea", req: true },
+      { k: "body", label: "본문", type: "textarea", req: true, max: 3000 },
       { k: "img", label: "이미지 (선택)", type: "image" },
       { k: "tricks", label: "사용한 속임수 (2개 이상)", type: "checks", opts: ["사실처럼 꾸미기", "감정 자극", "출처 불분명", "일부 사실 섞기", "자극적 제목", "편견 자극", "이익 목적", "빠른 공유 유도"], req: true },
       { k: "lie", label: "🔒 숨겨 둔 거짓", type: "textarea", req: true, private: true },
