@@ -3,9 +3,9 @@
 // blob은 화면 목록에서 듣지 않고, 열어 볼 때만 한 번 불러옵니다(데이터 절약).
 (function () {
   const { esc, frame, bars, stat, pct } = UI;
-  const NEW = ["recap", "codelab", "siteup", "sitegal", "report", "cardup", "cardvote", "cardresult", "award3"];
+  const NEW = ["pvote", "recap", "codelab", "siteup", "sitegal", "report", "cardup", "cardvote", "cardresult", "award3"];
   const INPUT = ["codelab", "siteup", "report", "cardup"];
-  UI2.TYPES.push(...NEW); UI2.INPUT_TYPES.push(...INPUT); UI2.REVEAL_TYPES.push("cardresult", "award3");
+  UI2.TYPES.push(...NEW); UI2.INPUT_TYPES.push(...INPUT); UI2.REVEAL_TYPES.push("cardresult", "award3", "pvote");
 
   const A = (D, id) => ((D.ans || {})[id]) || {};
   const nameOf = (D, sid) => ((D.students || {})[sid] || {}).name || "";
@@ -47,6 +47,25 @@
   }
   window.X3 = { wrapSite, BADGE };
 
+
+  // ======================================================== 1교시: 옛날 기사 전시 · 투표
+  function pvote(step, D, ctx) {
+    const H = ((D.hidden2 || {})[step.src]) || {}, votes = A(D, step.id), rv = !!D.state.reveal;
+    const list = Object.entries(((D.posts || {})[step.src]) || {}).filter(([sid, e]) => e && (ctx.role === "teacher" || !H[sid])).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+    const cnt = {}; Object.values(votes).forEach(t => { if (t) cnt[t] = (cnt[t] || 0) + 1; });
+    const my = votes[ctx.sid];
+    const tile = ([sid, e]) => `<div class="ent x3card ${sid === ctx.sid ? "mine" : ""} ${my === sid ? "voted" : ""}"><button class="x3cov" data-open="${step.src}/${sid}">${e.img ? `<img src="${e.img}" alt="">` : `<div class="noimg">📰 ${esc(e.kw || "")}</div>`}</button>
+      <div class="b"><div class="k">${esc(e.kw || "")} · ${esc(e.m2date || "")}</div><div class="tt">${esc(e.title || "")}</div><div class="nm" style="margin:4px 0">${esc(String(e.m2what || "").slice(0, 70))}${String(e.m2what || "").length > 70 ? "…" : ""}</div><div class="nm">${esc(nameOf(D, sid) || e.name || "")}${H[sid] ? " <span style='color:#d2423a'>숨김</span>" : ""}${rv ? ` · <b>${cnt[sid] || 0}표</b>` : ""}</div>
+      ${ctx.role === "student" && !rv ? (sid === ctx.sid ? `<small class="hint">내 기사</small>` : `<button class="btn ${my === sid ? "" : "ghost"}" data-x3="pv" data-sid="${sid}">${my === sid ? "✓ 투표함" : "투표하기"}</button>`) : ""}</div></div>`;
+    let top = "";
+    if (rv) {
+      const R = list.filter(([sid]) => !H[sid]).map(x => ({ x, n: cnt[x[0]] || 0 })).filter(r => r.n > 0).sort((a, b) => b.n - a.n).slice(0, 3), medal = ["🥇", "🥈", "🥉"];
+      top = R.length ? `<div class="x3pod" style="margin-bottom:14px">${R.map((r, i) => `<div class="p${i}"><div class="md">${medal[i]}</div><b>${esc(r.x[1].title || "")}</b><span>${esc(r.x[1].m2date || "")}</span><span>${esc(nameOf(D, r.x[0]) || r.x[1].name || "")} · ${r.n}표</span></div>`).join("")}</div>` : "<p class='hint'>투표가 없어요.</p>";
+    }
+    const head = rv ? "" : ctx.role === "teacher" ? `<div class="sub">카드를 누르면 자세히 볼 수 있어요. 투표가 끝나면 <b>R 키</b>로 결과를 발표해요.</div>` : `<div class="sub">카드를 눌러 읽어 보고, 가장 놀랍거나 지금의 가짜뉴스와 닮은 기사에 <b>1표</b>! (내 기사에는 투표할 수 없어요 · 발표 전까지 바꿀 수 있어요)</div>`;
+    return frame(`${step.title2 || step.title} (${list.length})`, `${head}<div class="stats">${stat("투표", `${Object.keys(votes).length}<small>명</small>`)}${ctx.role === "student" && !rv ? stat("내 투표", my ? "완료" : "아직") : ""}</div>${top}
+      ${list.length ? `<div class="gal">${list.map(tile).join("")}</div>` : "<p class='hint'>아직 올라온 기사가 없어요.</p>"}`);
+  }
   // ======================================================== 1교시: 우리가 만든 결과물
   function recap(step, D) {
     const P = D.posts || {}, H = D.hidden2 || {};
@@ -496,7 +515,7 @@ document.getElementById("btn").onclick = function () {
   }
 
   // ======================================================== 연결
-  const R = { recap, codelab, siteup, sitegal, report, cardup, cardvote, cardresult, award3 };
+  const R = { pvote, recap, codelab, siteup, sitegal, report, cardup, cardvote, cardresult, award3 };
   const baseRender = UI2.render, baseBind = UI2.bind;
   UI2.render = function (step, D, ctx, draft) {
     if (!NEW.includes(step.t)) return baseRender(step, D, ctx, draft);
@@ -545,6 +564,7 @@ document.getElementById("btn").onclick = function () {
     if (k === "dmove") { if (deck && deck.imgs) { deck.i = Math.max(0, Math.min(deck.imgs.length - 1, deck.i + +t.dataset.d)); drawDeck(); } return; }
     if (k === "vote") { if (t.dataset.sid === me.sid || D.state.reveal) return; const cur = A(D, "cvote")[me.sid]; await put(`ans/cvote/${me.sid}`, cur === t.dataset.sid ? null : t.dataset.sid); if (deck) drawDeck(); return; }
     if (k === "chide") { const on = ((D.hidden2 || {}).cardup || {})[t.dataset.sid]; put(`hidden2/cardup/${t.dataset.sid}`, on ? null : true); deck = null; return ov(""); }
+    if (k === "pv") { const st = C.step || {}; if (t.dataset.sid === me.sid || D.state.reveal || !st.id) return; const cur = A(D, st.id)[me.sid]; return put(`ans/${st.id}/${me.sid}`, cur === t.dataset.sid ? null : t.dataset.sid); }
     // 시상
     if (k === "pickapp") { const aw = A(D, "award3"); return put(`ans/award3/app`, aw.app === t.dataset.sid ? null : t.dataset.sid); }
     if (k === "pickws") { const ws = A(D, "award3").ws || {}; if (ws[t.dataset.sid]) return put(`ans/award3/ws/${t.dataset.sid}`, null); if (Object.keys(ws).length >= 2) return alert("워크시트 성실상은 2명까지 고를 수 있어요. 먼저 한 명을 취소해 주세요."); return put(`ans/award3/ws/${t.dataset.sid}`, true); }

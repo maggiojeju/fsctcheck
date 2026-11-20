@@ -155,7 +155,7 @@ function render() {
   $("modal").querySelectorAll("[data-hide]").forEach(b => b.onclick = () => { DB.set(`${ROOM}/hidden/${b.dataset.hide}`, true); openSid = null; render(); });
 
   $("where").textContent = `${D.state.day || 1}일차 · ${D.state.step + 1} / ${L.length} · ${step.sec} · ${step.title}`;
-  $("ctl").innerHTML = canReveal(step) ? `<div class="row" style="margin-top:10px"><button class="btn" id="rv" style="background:${D.state.reveal ? "#5f6672" : "#d2423a"}">${["cardresult", "award3"].includes(step.t) ? (D.state.reveal ? "발표 숨기기" : "발표하기 (R)") : (D.state.reveal ? "정답 숨기기" : "정답 공개 (R)")}</button></div>` : "";
+  $("ctl").innerHTML = canReveal(step) ? `<div class="row" style="margin-top:10px"><button class="btn" id="rv" style="background:${D.state.reveal ? "#5f6672" : "#d2423a"}">${["cardresult", "award3", "pvote"].includes(step.t) ? (D.state.reveal ? "발표 숨기기" : "발표하기 (R)") : (D.state.reveal ? "정답 숨기기" : "정답 공개 (R)")}</button></div>` : "";
   if ($("rv")) $("rv").onclick = toggleReveal;
   $("steps").querySelectorAll("button").forEach(b => b.classList.toggle("cur", +b.dataset.i === D.state.step));
   const cur = $("steps").querySelector(".cur"); if (cur) { const p = $("steps"); if (cur.offsetTop < p.scrollTop || cur.offsetTop > p.scrollTop + p.clientHeight - 30) p.scrollTop = cur.offsetTop - 60; }

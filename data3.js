@@ -115,7 +115,7 @@
       { k: "m3", label: "미션 3 (도전) · 제주에 관한 옛날 기사 제목과 날짜", type: "text" },
       { k: "img", label: "찾은 기사 화면 캡처 (선택)", type: "image" }
     ] },
-    { sec: S1, title: "우리 반이 찾은 옛날 기사", t: "pgallery", id: "newslib", title2: "우리 반이 찾은 옛날 ‘소문’ 기사", show: ["kw", "m2date"] },
+    { sec: S1, title: "옛날 기사 전시 · 투표", t: "pvote", id: "nvote", src: "newslib", title2: "우리 반이 찾은 옛날 ‘소문’ 기사 · 가장 놀라운 기사에 투표" },
 
     // ---------- 2교시
     { sec: S2, title: "2교시 시작", t: "slide", html: SEC("2교시", "그럴듯한<br>가짜 뉴스 사이트 만들기", "속이는 기술을 직접 해 봐야 안 속아요") },
